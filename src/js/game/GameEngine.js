@@ -506,44 +506,70 @@ export class GameEngine {
                     const time = Date.now() * 0.01;
                     hint.rotation.z = time;
                     hint.material.opacity = 0.5 + Math.sin(time * 2) * 0.2;
-                }
-            }
-        });
-    }
+                } // Closes: if (laneIndex >= 0 && laneIndex < this.hintObjects.length)
+            } // Closes: if (distance < -3 && distance > -8)
+        }); // Closes: obstacles.forEach(obstacle => {
+    } // Closes: updateHints()
 
     handleCollision(obstacle) {
         const obstacleType = obstacle.type;
         const requiredGesture = this.getRequiredGesture(obstacleType);
-        
+
         console.log(`[CollisionDebug] Player Gesture: "${this.playerGesture}", Obstacle Type: "${obstacleType}", Required Gesture to Win: "${requiredGesture}"`);
 
+        if (this.playerGesture === 'none' || !this.playerGesture) {
+            console.log("[CollisionDebug] Result: Player gesture is 'none' or invalid. Triggering GameOver.");
+            this.gameOver();
+            return;
+        }
+
         if (this.playerGesture === requiredGesture) {
-            // Correct gesture - score point and increase combo
             const basePoints = 10;
             const speedBonus = Math.floor(this.speed * 5);
             const comboBonus = this.combo * 2;
             const points = basePoints + speedBonus + comboBonus;
-            
+
             this.score += points;
             this.combo++;
             this.maxCombo = Math.max(this.maxCombo, this.combo);
-            
+
             this.audioManager.playSuccessSound();
             this.obstacleManager.removeObstacle(obstacle);
             this.updateScore();
             this.updateCombo();
-            
-            // Enhanced success effect
             this.sceneManager.createSuccessEffect(obstacle.mesh.position, points);
-            
-            // Screen shake effect for high combos
+
             if (this.combo > 5) {
                 this.createScreenShake();
             }
             console.log("[CollisionDebug] Result: Player WINS interaction.");
+        } else if (this.playerGesture === obstacleType) {
+            console.log(`[CollisionDebug] Result: Player TIES with obstacle. Player: ${this.playerGesture}, Obstacle: ${obstacleType}. Deducting points.`);
+            this.score -= 10*this.speed;
+            this.updateScore(); // Update score display immediately
+
+            if (this.score < 0) {
+                console.log("[CollisionDebug] Score became negative. Triggering GameOver.");
+                if (this.audioManager && typeof this.audioManager.playErrorSound === 'function') {
+                    this.audioManager.playErrorSound(); // Play sound on game over due to negative score
+                }
+                this.gameOver();
+                return; 
+            }
+            this.combo = 0;
+
+            if (this.audioManager && typeof this.audioManager.playErrorSound === 'function') {
+                this.audioManager.playErrorSound();
+            } else {
+                console.warn("[AudioManager] playErrorSound method not found or audioManager is not available. Skipping penalty sound.");
+            }
+
+            this.obstacleManager.removeObstacle(obstacle);
+            // this.updateScore(); // Moved up
+            this.updateCombo();
+            console.log(`[CollisionDebug] Game continues after tie/penalty. Current score: ${this.score}`);
         } else {
-            // Wrong gesture - game over
-            console.log("[CollisionDebug] Result: Player LOSES interaction. Triggering GameOver.");
+            console.log(`[CollisionDebug] Result: Player LOSES interaction (Wrong gesture: Player ${this.playerGesture} vs Obstacle ${obstacleType}, Required ${requiredGesture}). Triggering GameOver.`);
             this.gameOver();
         }
     }
@@ -551,19 +577,25 @@ export class GameEngine {
     createScreenShake() {
         const originalPosition = this.camera.position.clone();
         const shakeIntensity = Math.min(0.1, this.combo * 0.01);
-        
-        // Quick shake animation
+
+        if (this.combo <= 5 || shakeIntensity <= 0) {
+            return;
+        }
+
         let shakeTime = 0;
-        const shakeInterval = setInterval(() => {
-            this.camera.position.x = originalPosition.x + (Math.random() - 0.5) * shakeIntensity;
-            this.camera.position.y = originalPosition.y + (Math.random() - 0.5) * shakeIntensity;
-            
-            shakeTime += 16;
-            if (shakeTime > 200) {
-                clearInterval(shakeInterval);
+        const duration = 200; // ms
+        const interval = 16; // ms
+
+        const shakeIntervalId = setInterval(() => {
+            this.camera.position.x = originalPosition.x + (Math.random() - 0.5) * shakeIntensity * 2;
+            this.camera.position.y = originalPosition.y + (Math.random() - 0.5) * shakeIntensity * 2;
+
+            shakeTime += interval;
+            if (shakeTime >= duration) {
+                clearInterval(shakeIntervalId);
                 this.camera.position.copy(originalPosition);
             }
-        }, 16);
+        }, interval);
     }
 
     getRequiredGesture(obstacleType) {
@@ -690,20 +722,5 @@ export class GameEngine {
         this.loadedPlayerModels = {}; // Clear references
     }
 
-    async initManagers() {
-        this.sceneManager = new SceneManager(this.scene);
-        this.obstacleManager = new ObstacleManager(this.scene);
-        this.collisionDetector = new CollisionDetector();
-        
-        this.sceneManager.createEnvironment();
-        this.createPlayerGesture();
-        this.createGestureIndicator();
-        
-        // Wait for models to load before allowing gameplay
-        console.log('Waiting for GLB models to load...');
-        await this.obstacleManager.waitForModelsToLoad();
-        console.log('GLB models loaded, game ready!');
-        
-        this.scheduleNextSpawn();
-    }
+
 }

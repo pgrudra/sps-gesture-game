@@ -12,7 +12,10 @@ export class AudioManager {
         
         // Background music
         this.backgroundMusic = null;
+        this.backgroundMusicSource = null;
+        this.backgroundMusicGain = null;
         this.isMusicPlaying = false;
+        this.musicBuffer = null;
         
         this.init();
     }
@@ -25,10 +28,30 @@ export class AudioManager {
             // Create sound effects using oscillators (no external files needed)
             this.createSoundEffects();
             
+            // Load background music
+            await this.loadBackgroundMusic();
+            
             console.log('Audio system initialized');
         } catch (error) {
             console.warn('Failed to initialize audio:', error);
             this.isEnabled = false;
+        }
+    }
+
+    async loadBackgroundMusic() {
+        try {
+            const response = await fetch('src/assets/sounds/bg_music.mp3');
+            if (!response.ok) {
+                throw new Error(`Failed to load background music: ${response.status}`);
+            }
+            
+            const arrayBuffer = await response.arrayBuffer();
+            this.musicBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+            console.log('Background music loaded successfully');
+        } catch (error) {
+            console.warn('Failed to load background music:', error);
+            // Fallback to generated ambient music if file loading fails
+            this.musicBuffer = null;
         }
     }
 
@@ -41,6 +64,13 @@ export class AudioManager {
                 duration: 0.3,
                 volume: 0.6,
                 envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.1 }
+            },
+            error: {
+                type: 'oscillator',
+                frequency: [200, 150], // Lower, dissonant tones
+                duration: 0.5,
+                volume: 0.5,
+                envelope: { attack: 0.05, decay: 0.2, sustain: 0.3, release: 0.25 }
             },
             gameOver: {
                 type: 'oscillator',
@@ -189,6 +219,10 @@ export class AudioManager {
         this.playSound('success');
     }
 
+    playErrorSound() {
+        this.playSound('error');
+    }
+
     playGameOverSound() {
         this.playSound('gameOver');
     }
@@ -205,15 +239,63 @@ export class AudioManager {
         this.playSound('powerUp');
     }
 
-    startBackgroundMusic() {
+    async startBackgroundMusic() {
         if (!this.isEnabled || this.isMusicPlaying) return;
         
-        // Create a simple ambient background music loop
-        this.createBackgroundMusic();
+        // Resume audio context if suspended
+        if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+        }
+        
+        if (this.musicBuffer) {
+            // Play the loaded MP3 file
+            this.playBackgroundMusicFile();
+        } else {
+            // Fallback to generated ambient music
+            this.createBackgroundMusic();
+        }
+        
         this.isMusicPlaying = true;
     }
 
+    playBackgroundMusicFile() {
+        // Stop any existing background music
+        this.stopBackgroundMusic();
+        
+        // Create new audio source and gain node
+        this.backgroundMusicSource = this.audioContext.createBufferSource();
+        this.backgroundMusicGain = this.audioContext.createGain();
+        
+        // Connect audio graph
+        this.backgroundMusicSource.connect(this.backgroundMusicGain);
+        this.backgroundMusicGain.connect(this.audioContext.destination);
+        
+        // Set buffer and properties
+        this.backgroundMusicSource.buffer = this.musicBuffer;
+        this.backgroundMusicSource.loop = true; // Enable looping
+        this.backgroundMusicSource.loopStart = 0;
+        this.backgroundMusicSource.loopEnd = this.musicBuffer.duration;
+        
+        // Set volume
+        const volume = this.musicVolume * this.masterVolume;
+        this.backgroundMusicGain.gain.setValueAtTime(0, this.audioContext.currentTime);
+        this.backgroundMusicGain.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 1); // Fade in over 1 second
+        
+        // Handle end event (shouldn't happen with loop=true, but just in case)
+        this.backgroundMusicSource.onended = () => {
+            if (this.isMusicPlaying) {
+                // Restart the music if it ended unexpectedly
+                setTimeout(() => this.playBackgroundMusicFile(), 100);
+            }
+        };
+        
+        // Start playing
+        this.backgroundMusicSource.start(0);
+        console.log('Background music started (MP3 file)');
+    }
+
     createBackgroundMusic() {
+        console.log('Using fallback generated ambient music');
         const playAmbientTone = () => {
             if (!this.isMusicPlaying) return;
             
@@ -251,10 +333,37 @@ export class AudioManager {
 
     stopBackgroundMusic() {
         this.isMusicPlaying = false;
+        
+        if (this.backgroundMusicSource) {
+            try {
+                // Fade out before stopping
+                if (this.backgroundMusicGain) {
+                    this.backgroundMusicGain.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 0.5);
+                }
+                
+                // Stop after fade out
+                setTimeout(() => {
+                    if (this.backgroundMusicSource) {
+                        this.backgroundMusicSource.stop();
+                        this.backgroundMusicSource = null;
+                        this.backgroundMusicGain = null;
+                    }
+                }, 500);
+            } catch (error) {
+                console.warn('Error stopping background music:', error);
+                this.backgroundMusicSource = null;
+                this.backgroundMusicGain = null;
+            }
+        }
     }
 
     setMasterVolume(volume) {
         this.masterVolume = Math.max(0, Math.min(1, volume));
+        // Update background music volume if playing
+        if (this.backgroundMusicGain && this.isMusicPlaying) {
+            const newVolume = this.musicVolume * this.masterVolume;
+            this.backgroundMusicGain.gain.linearRampToValueAtTime(newVolume, this.audioContext.currentTime + 0.1);
+        }
     }
 
     setSfxVolume(volume) {
@@ -263,6 +372,11 @@ export class AudioManager {
 
     setMusicVolume(volume) {
         this.musicVolume = Math.max(0, Math.min(1, volume));
+        // Update background music volume if playing
+        if (this.backgroundMusicGain && this.isMusicPlaying) {
+            const newVolume = this.musicVolume * this.masterVolume;
+            this.backgroundMusicGain.gain.linearRampToValueAtTime(newVolume, this.audioContext.currentTime + 0.1);
+        }
     }
 
     toggleSound() {
@@ -271,6 +385,15 @@ export class AudioManager {
             this.stopBackgroundMusic();
         }
         return this.isEnabled;
+    }
+
+    toggleBackgroundMusic() {
+        if (this.isMusicPlaying) {
+            this.stopBackgroundMusic();
+        } else {
+            this.startBackgroundMusic();
+        }
+        return this.isMusicPlaying;
     }
 
     // Utility method to ensure audio context is ready

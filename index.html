@@ -344,6 +344,7 @@
           this.gameState = "playing";
           this.uiManager.hideStartScreen();
           this.audioManager.playStartSound();
+          this.audioManager.startBackgroundMusic(); // Start background music
           this.gameEngine.startGame(
             this.onGameOver.bind(this),
             this.onScoreUpdate.bind(this)
