@@ -16,7 +16,7 @@ export class ObstacleManager {
         
         // GLB Model paths
         this.modelPaths = {
-            rock: 'src/assets/models/stone.glb',
+            rock: 'src/assets/models/rock.glb',
             paper: 'src/assets/models/paper.glb',
             scissors: 'src/assets/models/scissors.glb'
         };
@@ -161,6 +161,11 @@ export class ObstacleManager {
         
         // Common setup for all obstacles
         this.setupObstacleMesh(mesh, type);
+
+        // BoxHelper for debugging collisions
+        mesh.userData.boxHelper = new THREE.BoxHelper(mesh, 0xff0000); // Red color
+        mesh.userData.boxHelper.visible = false; // Initially hidden
+        this.scene.add(mesh.userData.boxHelper); // Add to scene once
         
         return mesh;
     }
@@ -180,9 +185,9 @@ export class ObstacleManager {
                 
                 // Optionally enhance materials
                 if (child.material) {
-                    // You can modify material properties here if needed
-                    child.material.transparent = true;
-                    child.material.opacity = 0.9;
+                    // Material properties can be modified here if needed
+                    // child.material.transparent = true; // Removed forced transparency
+                    // child.material.opacity = 0.9;    // Removed forced opacity
                 }
             }
         });
@@ -197,13 +202,9 @@ export class ObstacleManager {
         const maxDimension = Math.max(size.x, size.y, size.z);
         
         // Target size for obstacles (adjust as needed)
-        const targetSize = {
-            rock: 1.6,
-            paper: 2.4,
-            scissors: 2.0
-        };
+        const commonTargetSize = 1.0; // Standardized size for all obstacles
         
-        const scale = targetSize[type] / maxDimension;
+        const scale = commonTargetSize / maxDimension;
         model.scale.setScalar(scale);
         
         // Center the model
@@ -316,9 +317,9 @@ export class ObstacleManager {
             active: false,
             speed: 0,
             rotationSpeed: {
-                x: (Math.random() - 0.5) * 0.01,
-                y: (Math.random() - 0.5) * 0.02,
-                z: (Math.random() - 0.5) * 0.01
+                x: 0,
+                y: 0,
+                z: 0
             },
             originalScale: mesh.scale.clone(),
             pulsePhase: Math.random() * Math.PI * 2,
@@ -326,39 +327,12 @@ export class ObstacleManager {
         };
         
         // Add glow effect for better visibility
-        this.addGlowEffect(mesh, type);
+        // this.addGlowEffect(mesh, type); // Glow effect removed
     }
 
-    addGlowEffect(mesh, type) {
-        // Create subtle glow effect around obstacles
-        let glowGeometry, glowColor;
-        
-        switch (type) {
-            case 'rock':
-                glowGeometry = new THREE.SphereGeometry(1.2, 16, 12);
-                glowColor = 0x8B4513;
-                break;
-            case 'paper':
-                glowGeometry = new THREE.PlaneGeometry(2.2, 2.8);
-                glowColor = 0xFFFFFF;
-                break;
-            case 'scissors':
-                glowGeometry = new THREE.SphereGeometry(1.0, 16, 12);
-                glowColor = 0xC0C0C0;
-                break;
-        }
-        
-        const glowMaterial = new THREE.MeshBasicMaterial({
-            color: glowColor,
-            transparent: true,
-            opacity: 0.1,
-            side: THREE.BackSide
-        });
-        
-        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-        glow.userData.isGlow = true;
-        mesh.add(glow);
-    }
+    // addGlowEffect(mesh, type) { // Method removed
+    //     // ... (content of removed method)
+    // }
 
     // Method to check if models are ready
     async waitForModelsToLoad() {
@@ -402,8 +376,8 @@ export class ObstacleManager {
         
         // Reset obstacle properties
         obstacle.position.set(
-            lane * 2.5, // Slightly wider lanes: -2.5, 0, 2.5
-            1.5,
+            0, // Force center lane (x=0)
+            1.0, // Adjusted Y-position to 1.0 to match player gesture (prev 0.5)
             this.spawnDistance
         );
         
@@ -417,12 +391,18 @@ export class ObstacleManager {
         const scaleVariation = 0.8 + Math.random() * 0.4; // 0.8 to 1.2 scale
         obstacle.scale.multiplyScalar(scaleVariation);
         
-        // Random rotation start
-        obstacle.rotation.y = Math.random() * Math.PI * 2;
+        // Set rotation to face the player (assuming player is along positive Z from obstacle's perspective)
+        obstacle.rotation.y = 0; // Rotate 180 degrees to face forward if model's front is +Z
         
         // Add floating animation with unique phase
         obstacle.userData.floatOffset = Math.random() * Math.PI * 2;
         
+        // Update and show BoxHelper for the spawned obstacle
+        if (obstacle.userData.boxHelper) {
+            obstacle.userData.boxHelper.update(); // Update to reflect obstacle's new transform
+            obstacle.userData.boxHelper.visible = true;
+        }
+
         this.scene.add(obstacle);
         this.obstacles.push({
             mesh: obstacle,
@@ -453,12 +433,12 @@ export class ObstacleManager {
         if (availableCombinations.length === 0) {
             // Fallback to any combination
             const randomType = types[Math.floor(Math.random() * types.length)];
-            const randomLane = lanes[Math.floor(Math.random() * lanes.length)];
-            return this.spawnObstacle(randomType, randomLane);
+            // const randomLane = lanes[Math.floor(Math.random() * lanes.length)]; // Keep obstacles in center lane
+            return this.spawnObstacle(randomType, 0); // Force lane 0
         }
         
         const combination = availableCombinations[Math.floor(Math.random() * availableCombinations.length)];
-        return this.spawnObstacle(combination.type, combination.lane);
+        return this.spawnObstacle(combination.type, 0); // Force lane 0
     }
 
     getRecentObstacleInLane(lane) {
@@ -479,22 +459,22 @@ export class ObstacleManager {
             
             // Move obstacle forward
             mesh.position.z += speed;
+            mesh.position.y = 1.0; // Clamp Y-position to spawn height (1.0) to prevent oscillations
             
-            // Enhanced floating animation
+            // Enhanced floating animation (Y-component removed for clamping)
             const time = Date.now() * 0.003;
             const floatTime = time + mesh.userData.floatOffset;
-            mesh.position.y = 1.5 + Math.sin(floatTime) * 0.3 + Math.cos(floatTime * 0.7) * 0.1;
             
-            // More interesting rotation (adjust for GLB models)
-            if (mesh.userData.isGLBModel) {
-                // Gentler rotation for detailed GLB models
-                mesh.rotation.y += mesh.userData.rotationSpeed.y * 0.5;
-            } else {
-                // Original rotation for procedural geometry
-                mesh.rotation.x += mesh.userData.rotationSpeed.x;
-                mesh.rotation.y += mesh.userData.rotationSpeed.y;
-                mesh.rotation.z += mesh.userData.rotationSpeed.z;
-            }
+            // More interesting rotation (adjust for GLB models) - Rotation removed
+            // if (mesh.userData.isGLBModel) {
+            //     // Gentler rotation for detailed GLB models
+            //     mesh.rotation.y += mesh.userData.rotationSpeed.y * 0.5;
+            // } else {
+            //     // Original rotation for procedural geometry
+            //     mesh.rotation.x += mesh.userData.rotationSpeed.x;
+            //     mesh.rotation.y += mesh.userData.rotationSpeed.y;
+            //     mesh.rotation.z += mesh.userData.rotationSpeed.z;
+            // }
             
             // Add subtle pulsing effect
             const pulseTime = time * 2 + mesh.userData.pulsePhase;
@@ -502,8 +482,8 @@ export class ObstacleManager {
             mesh.scale.copy(mesh.userData.originalScale);
             mesh.scale.multiplyScalar(pulseScale);
             
-            // Update glow effect
-            this.updateGlowEffect(mesh, time);
+            // Update glow effect - Glow effect removed
+            // this.updateGlowEffect(mesh, time);
             
             // Remove obstacle if it's too far forward
             if (mesh.position.z > this.despawnDistance) {
@@ -515,16 +495,9 @@ export class ObstacleManager {
         });
     }
 
-    updateGlowEffect(mesh, time) {
-        // Animate the glow effect
-        mesh.traverse(child => {
-            if (child.userData.isGlow) {
-                const glowIntensity = 0.05 + Math.sin(time * 3) * 0.03;
-                child.material.opacity = glowIntensity;
-                child.scale.setScalar(1 + Math.sin(time * 2) * 0.1);
-            }
-        });
-    }
+    // updateGlowEffect(mesh, time) { // Method removed
+    //     // ... (content of removed method)
+    // }
 
     removeObstacle(obstacle) {
         const mesh = obstacle.mesh;
@@ -534,6 +507,11 @@ export class ObstacleManager {
         
         // Mark as inactive for reuse
         mesh.userData.active = false;
+
+        // Hide BoxHelper when obstacle is returned to pool or deactivated
+        if (mesh.userData.boxHelper) {
+            mesh.userData.boxHelper.visible = false;
+        }
         
         // Reset transformations for reuse
         mesh.position.set(0, 0, 0);
@@ -705,44 +683,69 @@ export class ObstacleManager {
     }
 
     dispose() {
-        this.reset();
-        
-        // Dispose of all pooled obstacles
+        // Dispose BoxHelpers from active obstacles
+        this.obstacles.forEach(obstacleData => {
+            if (obstacleData.mesh && obstacleData.mesh.userData.boxHelper) {
+                this.scene.remove(obstacleData.mesh.userData.boxHelper);
+                obstacleData.mesh.userData.boxHelper.dispose();
+                obstacleData.mesh.userData.boxHelper = null;
+            }
+        });
+
+        // Dispose BoxHelpers from pooled obstacles
         Object.values(this.obstaclePool).forEach(pool => {
-            pool.forEach(obstacle => {
-                if (obstacle.geometry) obstacle.geometry.dispose();
-                if (obstacle.material) {
-                    if (Array.isArray(obstacle.material)) {
-                        obstacle.material.forEach(material => material.dispose());
+            pool.forEach(mesh => {
+                if (mesh.userData.boxHelper) {
+                    this.scene.remove(mesh.userData.boxHelper);
+                    mesh.userData.boxHelper.dispose();
+                    mesh.userData.boxHelper = null;
+                }
+            });
+        });
+
+        this.reset(); // This will move active obstacles back to pool and deactivate them
+        
+        // Dispose of all pooled obstacles' geometries and materials
+        Object.values(this.obstaclePool).forEach(pool => {
+            pool.forEach(obstacleMesh => {
+                if (obstacleMesh.geometry) obstacleMesh.geometry.dispose();
+                if (obstacleMesh.material) {
+                    if (Array.isArray(obstacleMesh.material)) {
+                        obstacleMesh.material.forEach(material => material.dispose());
                     } else {
-                        obstacle.material.dispose();
+                        obstacleMesh.material.dispose();
                     }
                 }
             });
         });
         
-        // Dispose materials
+        // Dispose of the template materials stored in this.materials
         Object.values(this.materials).forEach(material => {
             material.dispose();
         });
         
-        // Clean up loaded models
-        Object.values(this.loadedModels).forEach(model => {
-            if (model && model.scene) {
-                model.scene.traverse(child => {
-                    if (child.geometry) child.geometry.dispose();
-                    if (child.material) {
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach(mat => mat.dispose());
-                        } else {
-                            child.material.dispose();
+        // Clean up loaded GLB models
+        Object.values(this.loadedModels).forEach(gltf => {
+            if (gltf && gltf.scene) {
+                gltf.scene.traverse(child => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(mat => mat.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
                         }
                     }
                 });
             }
         });
         
+        // Clear pools and references
         this.obstaclePool = { rock: [], paper: [], scissors: [] };
         this.loadedModels = { rock: null, paper: null, scissors: null };
+        this.obstacles = [];
+        console.log("ObstacleManager disposed.");
     }
 }

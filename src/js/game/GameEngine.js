@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SceneManager } from './SceneManager.js';
 import { ObstacleManager } from './ObstacleManager.js';
 import { CollisionDetector } from './CollisionDetector.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export class GameEngine {
     constructor(canvas, audioManager) {
@@ -24,7 +25,7 @@ export class GameEngine {
         this.combo = 0;
         this.maxCombo = 0;
         this.speed = 1.0;
-        this.baseSpeed = 0.015; // Slightly slower base speed
+        this.baseSpeed = 0.03; // Increased base speed
         this.speedIncrement = 0.0005; // More gradual speed increase
         this.maxSpeed = 0.08;
         
@@ -65,15 +66,75 @@ export class GameEngine {
         // Hint system
         this.hintObjects = [];
         this.showHints = true;
+
+        // GLB Loader for player gestures
+        this.gltfLoader = new GLTFLoader();
+        this.playerModelPaths = {
+            rock: 'src/assets/models/rock.glb',
+            paper: 'src/assets/models/paper.glb',
+            scissors: 'src/assets/models/scissors.glb',
+            none: null // No model for 'none' state initially
+        };
+        this.loadedPlayerModels = {
+            rock: null,
+            paper: null,
+            scissors: null,
+            none: null
+        };
     }
 
     async init() {
         this.initThreeJS();
-        await this.initManagers(); // Make this await
+        await this.loadPlayerModels(); // Load player models first
+        await this.initManagers();
         this.setupEventListeners();
-        this.createUI();
+        // this.createUI(); // UI creation might be handled differently or within initManagers/createPlayerGesture
         this.startRenderLoop();
+        this.setPlayerGesture('rock'); // Set default gesture after everything is initialized
     }
+    async loadPlayerModels() {
+        console.log('GameEngine: Starting to load player GLB models...');
+        const loadPromises = Object.keys(this.playerModelPaths).map(async (type) => {
+            const path = this.playerModelPaths[type];
+            if (!path) {
+                this.loadedPlayerModels[type] = null;
+                return { type, success: true, skipped: true };
+            }
+            try {
+                const gltf = await this.gltfLoader.loadAsync(path);
+                const model = gltf.scene;
+
+                // Normalize model scale and position
+                const box = new THREE.Box3().setFromObject(model);
+                const size = box.getSize(new THREE.Vector3());
+                const maxDimension = Math.max(size.x, size.y, size.z);
+                const targetSize = 1.0; // Player hand model size (matched to obstacles)
+                const scale = targetSize / maxDimension;
+                model.scale.setScalar(scale);
+                
+                const center = box.getCenter(new THREE.Vector3());
+                model.position.sub(center.multiplyScalar(scale));
+
+                model.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        // child.receiveShadow = true; // Player hand likely doesn't need to receive shadows
+                    }
+                });
+
+                this.loadedPlayerModels[type] = model;
+                console.log(`GameEngine: Loaded player ${type} model successfully from ${path}.`);
+                return { type, success: true };
+            } catch (error) {
+                console.error(`GameEngine: Failed to load player ${type} model from ${path}:`, error);
+                this.loadedPlayerModels[type] = null;
+                return { type, success: false, error };
+            }
+        });
+        await Promise.all(loadPromises);
+        console.log('GameEngine: Player GLB models loading process complete.');
+    }
+
     getLoadingStatus() {
         return this.obstacleManager ? this.obstacleManager.getModelLoadingStatus() : null;
     }
@@ -124,40 +185,33 @@ export class GameEngine {
         this.scene.add(rimLight);
     }
 
-    initManagers() {
+    async initManagers() { // Made async
         this.sceneManager = new SceneManager(this.scene);
         this.obstacleManager = new ObstacleManager(this.scene);
         this.collisionDetector = new CollisionDetector();
+
+        console.log('GameEngine: Waiting for ObstacleManager models to load...');
+        await this.obstacleManager.loadingPromise; // Wait for obstacle models
+        console.log('GameEngine: ObstacleManager models loaded.');
         
         this.sceneManager.createEnvironment();
-        this.createPlayerGesture();
-        this.createGestureIndicator();
+        this.createPlayerGesture(); // Creates the group and BoxHelper
+        // this.createGestureIndicator(); // Gesture indicator might be part of UI now
         this.scheduleNextSpawn();
     }
 
     createPlayerGesture() {
-        const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.2);
-        const material = new THREE.MeshLambertMaterial({ 
-            color: 0x4ecdc4,
-            transparent: true,
-            opacity: 0.9
-        });
-        this.playerGestureObject = new THREE.Mesh(geometry, material);
-        this.playerGestureObject.position.set(0, 1, 4);
-        this.playerGestureObject.castShadow = true;
-        this.scene.add(this.playerGestureObject);
-        
-        // Add glow effect
-        const glowGeometry = new THREE.BoxGeometry(1, 1, 0.3);
-        const glowMaterial = new THREE.MeshBasicMaterial({
-            color: 0x4ecdc4,
-            transparent: true,
-            opacity: 0.2
-        });
-        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-        this.playerGestureObject.add(glow);
-        
-        this.updatePlayerGestureVisual('none');
+        this.playerGestureObject = new THREE.Group();
+        this.playerGestureObject.position.set(0, 1, 4); // Adjust Y as needed, should match GLB model center
+        this.scene.add(this.playerGestureObject); // Add to scene before creating BoxHelper
+
+        // Bounding Box Helper for Player
+        this.playerBoxHelper = new THREE.BoxHelper(this.playerGestureObject, 0x00ff00); // Green
+        this.playerBoxHelper.visible = true; // Make it visible for debugging
+        this.scene.add(this.playerBoxHelper);
+
+        // Initial gesture will be set by init() after models are loaded
+        // this.updatePlayerGestureVisual('rock'); // Moved to init()
     }
 
     createGestureIndicator() {
@@ -174,94 +228,80 @@ export class GameEngine {
         this.scene.add(this.gestureIndicator);
     }
 
-    updatePlayerGestureVisual(gesture) {
-        if (!this.playerGestureObject) return;
-        
-        // Remove existing geometry
-        this.playerGestureObject.geometry.dispose();
-        
-        let newGeometry;
-        let color = this.gestureColors[gesture] || this.gestureColors.none;
-        
-        switch (gesture) {
-            case 'rock':
-                newGeometry = new THREE.SphereGeometry(0.6, 20, 20);
-                break;
-            case 'paper':
-                newGeometry = new THREE.PlaneGeometry(1.2, 1.5);
-                break;
-            case 'scissors':
-                // Create better scissors representation
-                const scissorsGroup = new THREE.Group();
-                
-                // Create two cylindrical "blades"
-                const bladeGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 8);
-                const bladeMaterial = new THREE.MeshLambertMaterial({ color: color });
-                
-                const blade1 = new THREE.Mesh(bladeGeometry, bladeMaterial);
-                blade1.position.set(-0.15, 0, 0);
-                blade1.rotation.z = 0.2;
-                
-                const blade2 = new THREE.Mesh(bladeGeometry, bladeMaterial);
-                blade2.position.set(0.15, 0, 0);
-                blade2.rotation.z = -0.2;
-                
-                // Add handles
-                const handleGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.3, 8);
-                const handleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-                
-                const handle1 = new THREE.Mesh(handleGeometry, handleMaterial);
-                handle1.position.set(-0.15, -0.5, 0);
-                
-                const handle2 = new THREE.Mesh(handleGeometry, handleMaterial);
-                handle2.position.set(0.15, -0.5, 0);
-                
-                scissorsGroup.add(blade1, blade2, handle1, handle2);
-                
-                // Replace the mesh with the group
-                this.scene.remove(this.playerGestureObject);
-                this.playerGestureObject = scissorsGroup;
-                this.playerGestureObject.position.set(0, 1, 4);
-                this.playerGestureObject.castShadow = true;
-                this.scene.add(this.playerGestureObject);
-                return; // Skip the standard geometry update
-                
-            default:
-                newGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.2);
-                color = this.gestureColors.none;
+    updatePlayerGestureVisual(gestureToDisplay) {
+        if (!this.playerGestureObject) {
+            console.warn('GameEngine: playerGestureObject is null, cannot update visual.');
+            return;
         }
-        
-        this.playerGestureObject.geometry = newGeometry;
-        this.playerGestureObject.material.color.setHex(color);
-        
-        // Add pulsing effect for active gestures
-        if (gesture !== 'none') {
-            this.playerGestureObject.material.opacity = 1.0;
+
+        // Clear previous model
+        while (this.playerGestureObject.children.length > 0) {
+            const child = this.playerGestureObject.children[0];
+            this.playerGestureObject.remove(child);
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(m => m.dispose());
+                } else {
+                    child.material.dispose();
+                }
+            }
+        }
+
+        let model = this.loadedPlayerModels[gestureToDisplay];
+        let finalGestureShown = gestureToDisplay;
+
+        if (!model) {
+            // If the intended model is not found (e.g., 'unknown' was passed by mistake, or a valid model failed to load)
+            // try to fall back to 'rock'.
+            console.warn(`GameEngine: No GLB model loaded for intended gesture '${gestureToDisplay}'. Attempting fallback to 'rock'.`);
+            model = this.loadedPlayerModels['rock'];
+            finalGestureShown = 'rock'; // We are now attempting to show 'rock'
+
+            if (!model) {
+                // If 'rock' model itself is not available, then display empty.
+                console.error(`GameEngine: Fallback 'rock' model also not loaded. Displaying empty. playerGestureObject will be empty.`);
+                if (this.playerBoxHelper) {
+                    this.playerBoxHelper.update(); // Update box helper for empty group
+                }
+                return; // Exit, nothing to display
+            }
+        }
+
+        // At this point, 'model' is either the model for 'gestureToDisplay' or the fallback 'rock' model.
+        // 'finalGestureShown' is the gesture corresponding to 'model'.
+        const modelClone = model.clone();
+        this.playerGestureObject.add(modelClone);
+
+        // Apply gesture-specific transformations based on the model actually being displayed
+        if (finalGestureShown === 'paper' || finalGestureShown === 'scissors') {
+            modelClone.rotation.y = Math.PI; // Rotate 180 degrees around Y-axis
         } else {
-            this.playerGestureObject.material.opacity = 0.7;
+            modelClone.rotation.y = 0; // Ensure non-paper/scissors (like rock) have default rotation
         }
-        
-        // Add floating animation
-        this.animatePlayerGesture();
-    }
+
+        console.log(`GameEngine: Displaying ${finalGestureShown} GLB model (intended: ${gestureToDisplay}).`);
+
+        if (this.playerBoxHelper) {
+            this.playerBoxHelper.update();
+        }
+    } // Correctly closes updatePlayerGestureVisual
 
     animatePlayerGesture() {
-        if (!this.playerGestureObject) return;
-        
-        const time = Date.now() * 0.005;
-        this.playerGestureObject.position.y = 1 + Math.sin(time) * 0.15;
-        
-        // Add rotation for non-scissors gestures
-        if (this.playerGesture !== 'scissors') {
-            this.playerGestureObject.rotation.y = Math.sin(time * 0.5) * 0.1;
-        }
-        
-        // Pulsing effect for active gestures
-        if (this.playerGesture !== 'none') {
-            const pulse = (Math.sin(time * 2) + 1) * 0.1 + 0.9;
-            this.playerGestureObject.scale.setScalar(pulse);
-        } else {
-            this.playerGestureObject.scale.setScalar(1);
+        if (!this.playerGestureObject || !this.playerGestureObject.children.length) return; // Semicolon added
+
+        // The playerGestureObject (the group) itself is clamped to Y=1.0 in the update() method.
+        // This animation should apply to the model *within* the group, and only for non-Y axes if Y is already controlled.
+        const time = Date.now() * 0.0025;
+        const floatAmplitudeX = 0.03; // Amplitude for X sway
+
+        // Apply to the currently displayed model within the playerGestureObject group
+        const currentModel = this.playerGestureObject.children[0];
+        if (currentModel) {
+            // Y-animation removed, playerGestureObject.position.y is clamped in update()
+            // Ensure model's local Y is 0 if playerGestureObject (the group) handles global Y positioning
+            currentModel.position.y = 0; 
+            currentModel.position.x = Math.cos(time * 0.7) * floatAmplitudeX; // Slower sway on X // Semicolon added
         }
     }
 
@@ -337,13 +377,52 @@ export class GameEngine {
         this.startGame(this.onGameOverCallback, this.onScoreUpdateCallback, this.onComboUpdateCallback);
     }
 
-    setPlayerGesture(gesture) {
-        this.playerGesture = gesture;
-        this.updatePlayerGestureVisual(gesture);
+    setPlayerGesture(newGestureInput) {
+        let newGesture = newGestureInput; // work with a mutable copy
+
+        // Sanitize newGesture: if it's 'unknown', treat it as 'none' for decision making below.
+        if (newGesture === 'unknown') {
+            console.log(`GameEngine: Received 'unknown' gesture from recognizer.`);
+            newGesture = 'none'; // Treat 'unknown' as 'none' for the logic that follows
+        }
+
+        if (!newGesture || newGesture === 'none') {
+            // Case 1: Incoming gesture is effectively invalid (none, or was unknown)
+            if (this.playerGesture === 'none' || !this.playerGesture) {
+                // Subcase 1a: Current player gesture is also 'none' or uninitialized (e.g., at game start before first valid gesture)
+                // -> Default to 'rock' for game logic and visual display.
+                if (this.playerGesture !== 'rock') { // Avoid redundant update if somehow already rock
+                    this.playerGesture = 'rock';
+                    console.log(`GameEngine: No valid gesture input, current player gesture is '${this.playerGesture || 'uninitialized'}'. Defaulting to 'rock'.`);
+                    this.updatePlayerGestureVisual('rock');
+                }
+            } else {
+                // Subcase 1b: Current player gesture is valid. Maintain it.
+                // console.log(`GameEngine: No valid gesture input. Maintaining current gesture: "${this.playerGesture}".`);
+                // No change needed for this.playerGesture or its visual, as it's already showing the last valid one.
+            }
+            return; // Exit after handling invalid/unknown input
+        }
+
+        // Case 2: Incoming gesture is valid (rock, paper, or scissors)
+        if (this.playerGesture === newGesture) {
+            // console.log(`GameEngine: Player gesture "${newGesture}" is already active.`);
+            return; // No change needed if the new valid gesture is the same as the current one.
+        }
+        
+        // New valid gesture is different from current player gesture.
+        this.playerGesture = newGesture;
+        console.log(`GameEngine: Player gesture for logic set to: "${this.playerGesture}".`);
+        this.updatePlayerGestureVisual(this.playerGesture);
     }
 
     update(deltaTime) {
         if (!this.isRunning) return;
+
+        // Clamp player Y-position
+        if (this.playerGestureObject) {
+            this.playerGestureObject.position.y = 1.0;
+        }
         
         // More gradual speed scaling
         this.speed = Math.min(1.0 + (this.score * 0.05), 2.5);
@@ -364,6 +443,18 @@ export class GameEngine {
         // Check collisions
         const obstacles = this.obstacleManager.getActiveObstacles();
         for (let obstacle of obstacles) {
+            // Bounding Box Debug Logging for Rock vs Scissors
+            if (obstacle.type === 'scissors' && this.playerGesture === 'rock' && obstacle.mesh.position.z < 5 && obstacle.mesh.position.z > 3) { // Log when scissors is in interaction zone
+                const playerBox = new THREE.Box3().setFromObject(this.playerGestureObject);
+                const obstacleBox = new THREE.Box3().setFromObject(obstacle.mesh);
+                const playerPos = this.playerGestureObject.position;
+                const obsPos = obstacle.mesh.position;
+                console.log(`[BBoxDebug] Player(Rock) z:${playerPos.z.toFixed(2)} vs Obstacle(Scissors) z:${obsPos.z.toFixed(2)}`);
+                console.log(`[BBoxDebug] Player Box: Min(${playerBox.min.x.toFixed(2)},${playerBox.min.y.toFixed(2)},${playerBox.min.z.toFixed(2)}) Max(${playerBox.max.x.toFixed(2)},${playerBox.max.y.toFixed(2)},${playerBox.max.z.toFixed(2)})`);
+                console.log(`[BBoxDebug] Obstacle Box: Min(${obstacleBox.min.x.toFixed(2)},${obstacleBox.min.y.toFixed(2)},${obstacleBox.min.z.toFixed(2)}) Max(${obstacleBox.max.x.toFixed(2)},${obstacleBox.max.y.toFixed(2)},${obstacleBox.max.z.toFixed(2)})`);
+                console.log(`[BBoxDebug] Intersection Check Result: ${playerBox.intersectsBox(obstacleBox)}`);
+            }
+
             // Check collision with player
             if (this.collisionDetector.checkCollision(this.playerGestureObject, obstacle.mesh)) {
                 this.handleCollision(obstacle);
@@ -372,6 +463,7 @@ export class GameEngine {
             
             // Check if obstacle passed without interaction (game over)
             if (obstacle.mesh.position.z > 5) {
+                console.log(`[GameOverDebug] Obstacle passed triggering GameOver. Obstacle Type: "${obstacle.type}", Z-Pos: ${obstacle.mesh.position.z.toFixed(2)}. Player Gesture: "${this.playerGesture}"`);
                 this.gameOver();
                 break;
             }
@@ -423,6 +515,8 @@ export class GameEngine {
         const obstacleType = obstacle.type;
         const requiredGesture = this.getRequiredGesture(obstacleType);
         
+        console.log(`[CollisionDebug] Player Gesture: "${this.playerGesture}", Obstacle Type: "${obstacleType}", Required Gesture to Win: "${requiredGesture}"`);
+
         if (this.playerGesture === requiredGesture) {
             // Correct gesture - score point and increase combo
             const basePoints = 10;
@@ -446,8 +540,10 @@ export class GameEngine {
             if (this.combo > 5) {
                 this.createScreenShake();
             }
+            console.log("[CollisionDebug] Result: Player WINS interaction.");
         } else {
             // Wrong gesture - game over
+            console.log("[CollisionDebug] Result: Player LOSES interaction. Triggering GameOver.");
             this.gameOver();
         }
     }
@@ -493,6 +589,11 @@ export class GameEngine {
     }
 
     gameOver() {
+        console.log(`[GameOverDebug] gameOver() method entered. Player Gesture: "${this.playerGesture}", Score: ${this.score}, Max Combo: ${this.maxCombo}, IsRunning: ${this.isRunning}`);
+        if (!this.isRunning) {
+            console.warn("[GameOverDebug] gameOver() called, but game is already not running. This might indicate multiple gameOver triggers.");
+            // return; // Optional: prevent multiple executions if it causes issues, but log first.
+        }
         this.isRunning = false;
         this.combo = 0;
         this.sceneManager.createGameOverEffect();
@@ -562,6 +663,31 @@ export class GameEngine {
         });
         
         this.renderer.dispose();
+
+        if (this.playerBoxHelper) {
+            this.scene.remove(this.playerBoxHelper);
+            this.playerBoxHelper.dispose();
+            this.playerBoxHelper = null;
+        }
+
+        // Dispose loaded player models (basic attempt)
+        Object.values(this.loadedPlayerModels).forEach(model => {
+            if (model && model.traverse) {
+                model.traverse(child => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(m => m.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        this.loadedPlayerModels = {}; // Clear references
     }
 
     async initManagers() {

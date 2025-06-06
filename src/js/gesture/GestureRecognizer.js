@@ -93,8 +93,10 @@ export class GestureRecognizer {
             return 'rock';
         }
         
-        // Paper: All fingers extended (open hand)
-        if (extendedFingers.every(extended => extended)) {
+        // Paper: The four main fingers (Index, Middle, Ring, Pinky) are extended.
+        // This is a more robust check that handles different thumb positions,
+        // correctly identifying both of the "paper" gestures you provided.
+        if (extendedFingers[1] && extendedFingers[2] && extendedFingers[3] && extendedFingers[4]) {
             return 'paper';
         }
         
