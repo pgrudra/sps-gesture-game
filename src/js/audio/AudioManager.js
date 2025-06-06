@@ -40,7 +40,7 @@ export class AudioManager {
 
     async loadBackgroundMusic() {
         try {
-            const response = await fetch('src/assets/sounds/bg_music.mp3');
+            const response = await fetch('/assets/sounds/bg_music.mp3');
             if (!response.ok) {
                 throw new Error(`Failed to load background music: ${response.status}`);
             }

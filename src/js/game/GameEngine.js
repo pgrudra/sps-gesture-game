@@ -70,9 +70,9 @@ export class GameEngine {
         // GLB Loader for player gestures
         this.gltfLoader = new GLTFLoader();
         this.playerModelPaths = {
-            rock: 'src/assets/models/rock.glb',
-            paper: 'src/assets/models/paper.glb',
-            scissors: 'src/assets/models/scissors.glb',
+            rock: '/assets/models/rock.glb',
+            paper: '/assets/models/paper.glb',
+            scissors: '/assets/models/scissors.glb',
             none: null // No model for 'none' state initially
         };
         this.loadedPlayerModels = {
