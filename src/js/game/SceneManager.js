@@ -46,11 +46,11 @@ export class SceneManager {
         const ctx = canvas.getContext('2d');
         
         // Base grass color
-        ctx.fillStyle = '#4a7c59';
+        ctx.fillStyle = '#1a2c19'; // Darker base grass for night
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // Add some texture with random grass patterns
-        ctx.fillStyle = '#5d8a6b';
+        ctx.fillStyle = '#2d4a3b'; // Darker grass texture details
         for (let i = 0; i < 200; i++) {
             const x = Math.random() * canvas.width;
             const y = Math.random() * canvas.height;
@@ -59,7 +59,7 @@ export class SceneManager {
         }
         
         // Add path/track marks
-        ctx.strokeStyle = '#3a5c47';
+        ctx.strokeStyle = '#1a2c27'; // Darker path marks
         ctx.lineWidth = 2;
         for (let i = 0; i < 10; i++) {
             ctx.beginPath();
@@ -80,7 +80,7 @@ export class SceneManager {
         // Create a simple gradient sky
         const skyGeometry = new THREE.SphereGeometry(200, 32, 32);
         const skyMaterial = new THREE.MeshBasicMaterial({
-            color: 0x87CEEB,
+            color: 0x000022, // Very dark blue sky
             side: THREE.BackSide,
             transparent: true,
             opacity: 0.8
@@ -115,9 +115,9 @@ export class SceneManager {
                 8
             );
             const cloudMaterial = new THREE.MeshLambertMaterial({
-                color: 0xffffff,
+                color: 0xaaaaaa, // Greyer clouds for night
                 transparent: true,
-                opacity: 0.7
+                opacity: 0.5 // More translucent clouds
             });
             
             const cloudPart = new THREE.Mesh(cloudGeometry, cloudMaterial);
@@ -152,14 +152,14 @@ export class SceneManager {
         
         // Tree trunk
         const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.5, 4);
-        const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+        const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x4A2503 }); // Darker tree trunk
         const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
         trunk.position.y = 1;
         treeGroup.add(trunk);
         
         // Tree crown
         const crownGeometry = new THREE.SphereGeometry(2, 8, 8);
-        const crownMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+        const crownMaterial = new THREE.MeshLambertMaterial({ color: 0x124B12 }); // Darker tree crown
         const crown = new THREE.Mesh(crownGeometry, crownMaterial);
         crown.position.y = 4;
         crown.scale.y = 1.5;

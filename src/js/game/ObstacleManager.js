@@ -165,7 +165,7 @@ export class ObstacleManager {
         // BoxHelper for debugging collisions
         mesh.userData.boxHelper = new THREE.BoxHelper(mesh, 0xff0000); // Red color
         mesh.userData.boxHelper.visible = false; // Initially hidden
-        this.scene.add(mesh.userData.boxHelper); // Add to scene once
+        // this.scene.add(mesh.userData.boxHelper); // Add to scene once
         
         return mesh;
     }
@@ -400,7 +400,7 @@ export class ObstacleManager {
         // Update and show BoxHelper for the spawned obstacle
         if (obstacle.userData.boxHelper) {
             obstacle.userData.boxHelper.update(); // Update to reflect obstacle's new transform
-            obstacle.userData.boxHelper.visible = true;
+            // obstacle.userData.boxHelper.visible = true;
         }
 
         this.scene.add(obstacle);

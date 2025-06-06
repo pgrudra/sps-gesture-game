@@ -142,7 +142,7 @@ export class GameEngine {
     initThreeJS() {
         // Scene
         this.scene = new THREE.Scene();
-        this.scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
+        this.scene.fog = new THREE.Fog(0x000033, 15, 70); // Dark blue fog, closer
         
         // Camera
         this.camera = new THREE.PerspectiveCamera(
@@ -164,14 +164,14 @@ export class GameEngine {
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.renderer.setClearColor(0x87CEEB, 1);
+        this.renderer.setClearColor(0x000022, 1); // Very dark blue background
         
         // Enhanced lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        const ambientLight = new THREE.AmbientLight(0x404060, 0.3); // Dim, bluish ambient light
         this.scene.add(ambientLight);
         
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(10, 10, 5);
+        const directionalLight = new THREE.DirectionalLight(0xaaaaff, 0.5); // Cool moonlight
+        directionalLight.position.set(-10, 15, -5); // Reposition moonlight
         directionalLight.castShadow = true;
         directionalLight.shadow.mapSize.width = 2048;
         directionalLight.shadow.mapSize.height = 2048;
@@ -180,7 +180,7 @@ export class GameEngine {
         this.scene.add(directionalLight);
 
         // Add rim lighting
-        const rimLight = new THREE.DirectionalLight(0x4ecdc4, 0.3);
+        const rimLight = new THREE.DirectionalLight(0x6060aa, 0.2); // Subtle cool rim light
         rimLight.position.set(-5, 5, -5);
         this.scene.add(rimLight);
     }
@@ -207,8 +207,8 @@ export class GameEngine {
 
         // Bounding Box Helper for Player
         this.playerBoxHelper = new THREE.BoxHelper(this.playerGestureObject, 0x00ff00); // Green
-        this.playerBoxHelper.visible = true; // Make it visible for debugging
-        this.scene.add(this.playerBoxHelper);
+        // this.playerBoxHelper.visible = true; // Make it visible for debugging
+        // this.scene.add(this.playerBoxHelper);
 
         // Initial gesture will be set by init() after models are loaded
         // this.updatePlayerGestureVisual('rock'); // Moved to init()
