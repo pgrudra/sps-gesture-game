@@ -425,7 +425,7 @@ export class GameEngine {
         }
         
         // More gradual speed scaling
-        this.speed = Math.min(1.0 + (this.score * 0.05), 2.5);
+        this.speed = Math.min(1.0 + (this.score * 0.05), 4.0);
         const currentSpeed = this.baseSpeed * this.speed;
         
         // Update obstacles
