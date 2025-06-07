@@ -35,8 +35,8 @@
         position: absolute;
         top: 20px;
         right: 20px;
-        width: 200px;
-        height: 150px;
+        width: 360px;
+        height: 270px;
         border: 3px solid #fff;
         border-radius: 10px;
         z-index: 10;
@@ -205,7 +205,7 @@
       @media (max-width: 768px) {
         #videoElement {
           width: 120px;
-          height: 90px;
+          height: 160px;
           top: 10px;
           right: 10px;
         }
@@ -286,7 +286,9 @@
           <div class="restart-instruction">
             Show ✋ PAPER gesture to restart
           </div>
-          <button class="restart-button" id="restartButton">Restart Game</button>
+          <button class="restart-button" id="restartButton">
+            Restart Game
+          </button>
         </div>
       </div>
     </div>
@@ -348,7 +350,9 @@
           const startButton = document.getElementById("startButton");
           startButton.addEventListener("click", () => this.startGame());
 
-          this.restartButton.addEventListener("click", () => this.restartGame());
+          this.restartButton.addEventListener("click", () =>
+            this.restartGame()
+          );
 
           window.addEventListener("resize", () => {
             if (this.gameEngine) {
