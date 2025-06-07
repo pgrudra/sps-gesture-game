@@ -13,7 +13,26 @@ export class SceneManager {
         this.cloudSpeed = 0.005;
     }
 
+    initializeLighting() {
+        // Ambient light for overall illumination
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // White light, 80% intensity
+        this.scene.add(ambientLight);
+
+        // Directional light for highlights and shadows
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // White light, 100% intensity
+        directionalLight.position.set(10, 20, 10); // Position the light
+        directionalLight.castShadow = true; // Enable shadow casting if needed later
+        this.scene.add(directionalLight);
+
+        // Optional: Configure shadow properties if you enable them on objects
+        // directionalLight.shadow.mapSize.width = 1024;
+        // directionalLight.shadow.mapSize.height = 1024;
+        // directionalLight.shadow.camera.near = 0.5;
+        // directionalLight.shadow.camera.far = 50;
+    }
+
     createEnvironment() {
+        this.initializeLighting(); // Add lights to the scene
         this.createGround();
         this.createSkybox();
         this.createClouds();
@@ -27,13 +46,13 @@ export class SceneManager {
         const groundMaterial = new THREE.MeshLambertMaterial({ 
             map: groundTexture,
             transparent: true,
-            opacity: 0.8
+            opacity: 0.9
         });
         
         this.ground = new THREE.Mesh(groundGeometry, groundMaterial);
         this.ground.rotation.x = -Math.PI / 2;
         this.ground.position.y = -1;
-        this.ground.receiveShadow = true;
+        this.ground.receiveShadow = true; // Ground should receive shadows if directional light casts them
         
         this.scene.add(this.ground);
     }
@@ -45,12 +64,12 @@ export class SceneManager {
         canvas.height = 512;
         const ctx = canvas.getContext('2d');
         
-        // Base grass color
-        ctx.fillStyle = '#1a2c19'; // Darker base grass for night
+        // Brighter base grass color
+        ctx.fillStyle = '#4a7c47'; // Much brighter green base
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // Add some texture with random grass patterns
-        ctx.fillStyle = '#2d4a3b'; // Darker grass texture details
+        ctx.fillStyle = '#5d9c5a'; // Bright grass texture details
         for (let i = 0; i < 200; i++) {
             const x = Math.random() * canvas.width;
             const y = Math.random() * canvas.height;
@@ -58,9 +77,18 @@ export class SceneManager {
             ctx.fillRect(x, y, size, size * 2);
         }
         
+        // Add lighter grass highlights
+        ctx.fillStyle = '#6bb368';
+        for (let i = 0; i < 100; i++) {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            const size = Math.random() * 2 + 1;
+            ctx.fillRect(x, y, size, size);
+        }
+        
         // Add path/track marks
-        ctx.strokeStyle = '#1a2c27'; // Darker path marks
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#3d6b3a'; // Visible path marks
+        ctx.lineWidth = 3;
         for (let i = 0; i < 10; i++) {
             ctx.beginPath();
             ctx.moveTo(canvas.width * 0.4, i * 50);
@@ -77,13 +105,13 @@ export class SceneManager {
     }
 
     createSkybox() {
-        // Create a simple gradient sky
+        // Create a brighter gradient sky
         const skyGeometry = new THREE.SphereGeometry(200, 32, 32);
         const skyMaterial = new THREE.MeshBasicMaterial({
-            color: 0x000022, // Very dark blue sky
+            color: 0x87CEEB, // Sky blue color
             side: THREE.BackSide,
             transparent: true,
-            opacity: 0.8
+            opacity: 0.7
         });
         
         const sky = new THREE.Mesh(skyGeometry, skyMaterial);
@@ -115,9 +143,9 @@ export class SceneManager {
                 8
             );
             const cloudMaterial = new THREE.MeshLambertMaterial({
-                color: 0xaaaaaa, // Greyer clouds for night
+                color: 0xffffff, // Pure white clouds
                 transparent: true,
-                opacity: 0.5 // More translucent clouds
+                opacity: 0.8 // More opaque for better visibility
             });
             
             const cloudPart = new THREE.Mesh(cloudGeometry, cloudMaterial);
@@ -152,14 +180,14 @@ export class SceneManager {
         
         // Tree trunk
         const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.5, 4);
-        const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x4A2503 }); // Darker tree trunk
+        const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brighter brown trunk
         const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
         trunk.position.y = 1;
         treeGroup.add(trunk);
         
         // Tree crown
         const crownGeometry = new THREE.SphereGeometry(2, 8, 8);
-        const crownMaterial = new THREE.MeshLambertMaterial({ color: 0x124B12 }); // Darker tree crown
+        const crownMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 }); // Bright forest green
         const crown = new THREE.Mesh(crownGeometry, crownMaterial);
         crown.position.y = 4;
         crown.scale.y = 1.5;
@@ -180,7 +208,7 @@ export class SceneManager {
         for (let i = 0; i < particleCount; i++) {
             const particleGeometry = new THREE.SphereGeometry(0.05, 4, 4);
             const particleMaterial = new THREE.MeshBasicMaterial({
-                color: new THREE.Color().setHSL(Math.random(), 1, 0.7),
+                color: new THREE.Color().setHSL(Math.random(), 1, 0.5), // Brighter particles
                 transparent: true,
                 opacity: 1
             });
@@ -221,7 +249,7 @@ export class SceneManager {
             new THREE.MeshBasicMaterial({
                 color: 0xff0000,
                 transparent: true,
-                opacity: 0.3
+                opacity: 0.4 // Slightly more visible
             })
         );
         
@@ -250,7 +278,7 @@ export class SceneManager {
         for (let i = 0; i < particleCount; i++) {
             const particleGeometry = new THREE.SphereGeometry(0.1, 4, 4);
             const particleMaterial = new THREE.MeshBasicMaterial({
-                color: Math.random() > 0.5 ? 0xff4444 : 0xffaa44,
+                color: Math.random() > 0.5 ? 0xff6666 : 0xffcc66, // Brighter explosion colors
                 transparent: true,
                 opacity: 1
             });
