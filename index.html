@@ -273,7 +273,6 @@
             <p>• Negative points for mathching gesture</p>
             <p>• Negative score = Game Over!</p>
             <p>• Game gets faster as you progress</p>
-            <p>• Show ✋ Paper gesture to restart after game over</p>
           </div>
           <button class="start-button" id="startButton">Start Game</button>
         </div>
@@ -282,9 +281,6 @@
           <h1>Game Over!</h1>
           <div class="final-score">
             Final Score: <span id="finalScore">0</span>
-          </div>
-          <div class="restart-instruction">
-            Show ✋ PAPER gesture to restart
           </div>
           <button class="restart-button" id="restartButton">
             Restart Game
@@ -368,8 +364,6 @@
 
           if (this.gameState === "playing") {
             this.gameEngine.setPlayerGesture(gesture);
-          } else if (this.gameState === "gameOver" && gesture === "paper") {
-            this.restartGame();
           }
         }
 
