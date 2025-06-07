@@ -202,6 +202,43 @@
         font-size: 18px;
       }
 
+      .loading-container {
+        position: fixed; /* Covers the whole screen */
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.85); /* Dark semi-transparent background */
+        display: flex;
+        flex-direction: column; /* Stack spinner and text vertically */
+        justify-content: center; /* Center vertically */
+        align-items: center; /* Center horizontally */
+        z-index: 9999; /* Ensure it's on top of other content */
+        color: white;
+        font-family: 'Arial', sans-serif; /* Or your game's font */
+        text-align: center;
+      }
+
+      .loading-spinner {
+        border: 8px solid #f3f3f3; /* Light grey */
+        border-top: 8px solid #3498db; /* Blue spinner color */
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        animation: spin 1.5s linear infinite;
+        margin-bottom: 20px; /* Space between spinner and text */
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      .loading-text {
+        font-size: 1.2em;
+        padding: 0 20px; /* Add some padding for smaller screens */
+      }
+
       @media (max-width: 768px) {
         #videoElement {
           width: 120px;

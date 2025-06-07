@@ -84,13 +84,58 @@ export class GameEngine {
     }
 
     async init() {
-        this.initThreeJS();
-        await this.loadPlayerModels(); // Load player models first
-        await this.initManagers();
-        this.setupEventListeners();
-        // this.createUI(); // UI creation might be handled differently or within initManagers/createPlayerGesture
-        this.startRenderLoop();
-        this.setPlayerGesture('rock'); // Set default gesture after everything is initialized
+        // --- START: Add loading screen ---
+        const loadingContainer = document.createElement('div');
+        loadingContainer.className = 'loading-container';
+        loadingContainer.innerHTML = `
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Loading game assets...</div>
+        `;
+        document.body.appendChild(loadingContainer);
+        // --- END: Add loading screen ---
+
+        try {
+            this.initThreeJS();
+            console.log('GameEngine: Initialized Three.js components.');
+
+            console.log('GameEngine: Starting to load player models...');
+            await this.loadPlayerModels(); // Load player models first
+            console.log('GameEngine: Player models loaded.');
+
+            console.log('GameEngine: Starting to initialize managers (including obstacle models)...');
+            await this.initManagers();
+            console.log('GameEngine: Managers initialized and obstacle models loaded.');
+
+            this.setupEventListeners();
+            console.log('GameEngine: Event listeners set up.');
+
+            // this.createUI(); // UI creation might be handled differently or within initManagers/createPlayerGesture
+            this.startRenderLoop();
+            console.log('GameEngine: Render loop started.');
+
+            this.setPlayerGesture('rock'); // Set default gesture after everything is initialized
+            console.log('GameEngine: Default player gesture set.');
+
+            console.log('GameEngine: Initialization complete.');
+
+        } catch (error) {
+            console.error("GameEngine init error:", error);
+            // Optionally, update loading text to show error
+            if (loadingContainer) {
+                const loadingText = loadingContainer.querySelector('.loading-text');
+                if (loadingText) {
+                    loadingText.textContent = 'Error loading assets. Please refresh.';
+                }
+            }
+            throw error; // Re-throw error to be caught by main() in index.html
+        } finally {
+            // --- START: Remove loading screen ---
+            if (loadingContainer) {
+                loadingContainer.remove();
+                console.log('GameEngine: Loading screen removed.');
+            }
+            // --- END: Remove loading screen ---
+        }
     }
     async loadPlayerModels() {
         console.log('GameEngine: Starting to load player GLB models...');
